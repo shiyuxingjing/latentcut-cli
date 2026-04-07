@@ -27,6 +27,7 @@ func newConfigSetCmd() *cobra.Command {
 		Use:   "set <key> <value>",
 		Short: "Set a config value",
 		Example: `  novelo-cli config set api-key mykey123
+  novelo-cli config set api-key-latentcut nv-xxx
   novelo-cli config set server-url http://localhost:4111
   novelo-cli config set output-dir ./output`,
 		Args: cobra.ExactArgs(2),
@@ -41,12 +42,20 @@ func newConfigSetCmd() *cobra.Command {
 			switch strings.ToLower(key) {
 			case "api-key", "api_key":
 				cfg.APIKey = value
+			case "api-key-latentcut", "api_key_latentcut":
+				cfg.APIKeyLatentCut = value
 			case "server-url", "server_url":
 				cfg.ServerURL = value
 			case "output-dir", "output_dir":
 				cfg.OutputDir = value
+			case "latentcut-url", "latentcut_url":
+				cfg.LatentCutURL = value
+			case "token":
+				cfg.Token = value
+			case "account":
+				cfg.Account = value
 			default:
-				return fmt.Errorf("unknown config key: %s (valid: api-key, server-url, output-dir)", key)
+				return fmt.Errorf("unknown config key: %s (valid: api-key, api-key-latentcut, server-url, output-dir, latentcut-url, token, account)", key)
 			}
 
 			if err := cfg.Save(); err != nil {
@@ -78,10 +87,22 @@ func newConfigGetCmd() *cobra.Command {
 				} else {
 					fmt.Println(maskKey(cfg.APIKey))
 				}
+			case "api-key-latentcut", "api_key_latentcut":
+				fmt.Println(maskKey(cfg.APIKeyLatentCut))
 			case "server-url", "server_url":
 				fmt.Println(cfg.ServerURL)
 			case "output-dir", "output_dir":
 				fmt.Println(cfg.OutputDir)
+			case "latentcut-url", "latentcut_url":
+				fmt.Println(cfg.LatentCutURL)
+			case "token":
+				fmt.Println(maskKey(cfg.Token))
+			case "account":
+				if cfg.Account == "" {
+					fmt.Println("(not set)")
+				} else {
+					fmt.Println(cfg.Account)
+				}
 			default:
 				return fmt.Errorf("unknown config key: %s", key)
 			}
@@ -100,9 +121,13 @@ func newConfigListCmd() *cobra.Command {
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			fmt.Printf("api-key:    %s\n", maskKey(cfg.APIKey))
-			fmt.Printf("server-url: %s\n", cfg.ServerURL)
-			fmt.Printf("output-dir: %s\n", cfg.OutputDir)
+			fmt.Printf("api-key:            %s\n", maskKey(cfg.APIKey))
+			fmt.Printf("api-key-latentcut:  %s\n", maskKey(cfg.APIKeyLatentCut))
+			fmt.Printf("server-url:         %s\n", cfg.ServerURL)
+			fmt.Printf("output-dir:         %s\n", cfg.OutputDir)
+			fmt.Printf("latentcut-url:      %s\n", cfg.LatentCutURL)
+			fmt.Printf("account:            %s\n", cfg.Account)
+			fmt.Printf("token:              %s\n", maskKey(cfg.Token))
 			fmt.Printf("\nConfig path: %s\n", config.DefaultConfigPath())
 			return nil
 		},

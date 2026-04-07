@@ -26,6 +26,11 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOut, "json", false, "Output JSONL to stdout instead of progress display")
 
 	rootCmd.AddCommand(NewRunCmd())
+	rootCmd.AddCommand(NewLoginCmd())
+	rootCmd.AddCommand(NewProduceCmd())
+	rootCmd.AddCommand(NewChatCmd())
+	rootCmd.AddCommand(NewCreditsCmd())
+	rootCmd.AddCommand(NewRechargeCmd())
 	rootCmd.AddCommand(NewConfigCmd())
 	rootCmd.AddCommand(NewVersionCmd())
 }
