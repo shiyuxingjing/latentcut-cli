@@ -29,7 +29,7 @@ func runCredits() error {
 		return fmt.Errorf("load config: %w", err)
 	}
 	if cfg.EffectiveToken() == "" {
-		return fmt.Errorf("not logged in. Run: novelo-cli login")
+		return fmt.Errorf("not logged in. Run: latentcut login")
 	}
 
 	client := latentcut.NewClient(cfg.LatentCutURL, cfg.EffectiveToken())

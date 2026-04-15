@@ -27,7 +27,7 @@ func NewVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("novelo-cli %s (commit: %s, built: %s)\n", cliVersion, cliCommit, cliDate)
+			fmt.Printf("latentcut %s (commit: %s, built: %s)\n", cliVersion, cliCommit, cliDate)
 		},
 	}
 }

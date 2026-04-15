@@ -12,7 +12,7 @@ import (
 func NewConfigCmd() *cobra.Command {
 	configCmd := &cobra.Command{
 		Use:   "config",
-		Short: "Manage novelo-cli configuration",
+		Short: "Manage latentcut configuration",
 	}
 
 	configCmd.AddCommand(newConfigSetCmd())
@@ -26,10 +26,10 @@ func newConfigSetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <key> <value>",
 		Short: "Set a config value",
-		Example: `  novelo-cli config set api-key mykey123
-  novelo-cli config set api-key-latentcut nv-xxx
-  novelo-cli config set server-url http://localhost:4111
-  novelo-cli config set output-dir ./output`,
+		Example: `  latentcut config set api-key mykey123
+  latentcut config set api-key-latentcut nv-xxx
+  latentcut config set server-url http://localhost:4111
+  latentcut config set output-dir ./output`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, value := args[0], args[1]

@@ -17,8 +17,8 @@ func NewRechargeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "recharge",
 		Short: "Redeem a credit code to add credits",
-		Example: `  novelo-cli recharge --code ABC123
-  novelo-cli recharge -c ABC123`,
+		Example: `  latentcut recharge --code ABC123
+  latentcut recharge -c ABC123`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRecharge(code)
 		},
@@ -36,7 +36,7 @@ func runRecharge(code string) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 	if cfg.EffectiveToken() == "" {
-		return fmt.Errorf("not logged in. Run: novelo-cli login")
+		return fmt.Errorf("not logged in. Run: latentcut login")
 	}
 
 	client := latentcut.NewClient(cfg.LatentCutURL, cfg.EffectiveToken())

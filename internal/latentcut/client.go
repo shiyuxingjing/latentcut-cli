@@ -413,3 +413,58 @@ func (c *Client) GetProject(ctx context.Context, projectUUID string) (map[string
 	}
 	return *result, nil
 }
+
+// ListProjects retrieves all projects for the current user.
+func (c *Client) ListProjects(ctx context.Context) ([]map[string]any, error) {
+	_, raw, err := c.doJSON(ctx, http.MethodGet, "/api/projects", nil)
+	if err != nil {
+		return nil, err
+	}
+	// Server returns {data: {list: [...]}} (paginated)
+	type listWrapper struct {
+		List []map[string]any `json:"list"`
+	}
+	result, err := decodeData[listWrapper](raw)
+	if err != nil {
+		return nil, err
+	}
+	return result.List, nil
+}
+
+// DeleteProject deletes a project.
+func (c *Client) DeleteProject(ctx context.Context, projectUUID string) error {
+	_, _, err := c.doJSON(ctx, http.MethodDelete, "/api/projects/"+projectUUID, nil)
+	return err
+}
+
+// GenerateKeyframeImage triggers keyframe image generation.
+func (c *Client) GenerateKeyframeImage(ctx context.Context, projectUUID, keyframeUUID string) error {
+	_, _, err := c.doJSON(ctx, http.MethodPost, "/api/projects/"+projectUUID+"/generate/keyframe-image", map[string]string{
+		"keyframeUuid": keyframeUUID,
+	})
+	return err
+}
+
+// GenerateDialogueAudio triggers dialogue audio generation.
+func (c *Client) GenerateDialogueAudio(ctx context.Context, projectUUID, dialogueUUID string) error {
+	_, _, err := c.doJSON(ctx, http.MethodPost, "/api/projects/"+projectUUID+"/generate/dialogue-audio", map[string]string{
+		"dialogueUuid": dialogueUUID,
+	})
+	return err
+}
+
+// GenerateShotVideo triggers video generation for a shot.
+func (c *Client) GenerateShotVideo(ctx context.Context, projectUUID, shotUUID string) error {
+	_, _, err := c.doJSON(ctx, http.MethodPost, "/api/projects/"+projectUUID+"/generate/shot-video", map[string]string{
+		"shotUuid": shotUUID,
+	})
+	return err
+}
+
+// GenerateShotStoryboard triggers storyboard generation for a shot.
+func (c *Client) GenerateShotStoryboard(ctx context.Context, projectUUID, shotUUID string) error {
+	_, _, err := c.doJSON(ctx, http.MethodPost, "/api/projects/"+projectUUID+"/generate/shot-storyboard", map[string]string{
+		"shotUuid": shotUUID,
+	})
+	return err
+}

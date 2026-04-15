@@ -26,10 +26,10 @@ func NewChatCmd() *cobra.Command {
 		Use:   "chat",
 		Short: "Chat with creative-video-agent to brainstorm short drama ideas",
 		Long:  "Send a message to the creative-video-agent via latentCut-server. Supports multi-turn conversation via --thread-id. Designed for skill/script invocation.",
-		Example: `  novelo-cli chat -m "我想写一个仙侠故事"
-  novelo-cli chat -m "主角有什么特殊能力？" --thread-id thread-xxx
-  novelo-cli chat -m "就这个方向，开始写吧" --json
-  novelo-cli chat -m "换个话题" --new-thread`,
+		Example: `  latentcut chat -m "我想写一个仙侠故事"
+  latentcut chat -m "主角有什么特殊能力？" --thread-id thread-xxx
+  latentcut chat -m "就这个方向，开始写吧" --json
+  latentcut chat -m "换个话题" --new-thread`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runChat(message, threadID, newThread)
 		},
@@ -50,7 +50,7 @@ func runChat(message, threadID string, newThread bool) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 	if cfg.EffectiveToken() == "" {
-		return fmt.Errorf("not logged in. Run: novelo-cli login")
+		return fmt.Errorf("not logged in. Run: latentcut login")
 	}
 
 	// 2. Resolve thread ID

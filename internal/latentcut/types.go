@@ -66,35 +66,45 @@ type CanvasData struct {
 
 // CardData is a generic card in the canvas. Fields vary by card type.
 type CardData struct {
-	Raw         CardRaw `json:"_raw"`
-	Title       string  `json:"title,omitempty"`
-	Name        string  `json:"name,omitempty"`
-	Number      int     `json:"number,omitempty"`
-	Status      string  `json:"status,omitempty"`
-	VideoStatus string  `json:"videoStatus,omitempty"`
-	VideoURL    string  `json:"videoUrl,omitempty"`
-	ImageURL    string  `json:"imageUrl,omitempty"`
-	ImageStatus string  `json:"imageStatus,omitempty"`
-	ShotCount   int     `json:"shotCount,omitempty"`
-	EpisodeID   string  `json:"episodeId,omitempty"`
+	Raw           CardRaw `json:"_raw"`
+	Title         string  `json:"title,omitempty"`
+	Name          string  `json:"name,omitempty"`
+	Number        int     `json:"number,omitempty"`
+	Status        string  `json:"status,omitempty"`
+	VideoStatus   string  `json:"videoStatus,omitempty"`
+	VideoURL      string  `json:"videoUrl,omitempty"`
+	ImageURL      string  `json:"imageUrl,omitempty"`
+	ImageStatus   string  `json:"imageStatus,omitempty"`
+	Image         string  `json:"image,omitempty"`
+	CharacterName string  `json:"characterName,omitempty"`
+	CharacterUUID string  `json:"characterUuid,omitempty"`
+	Description   string  `json:"description,omitempty"`
+	Location      string  `json:"location,omitempty"`
+	ShotCount     int     `json:"shotCount,omitempty"`
+	EpisodeID     string  `json:"episodeId,omitempty"`
 }
 
 // CardRaw contains the raw DB fields from the server.
 type CardRaw struct {
-	ID            int    `json:"id"`
-	EpisodeUUID   string `json:"episode_uuid,omitempty"`
-	ShotUUID      string `json:"shot_uuid,omitempty"`
-	CharacterUUID string `json:"character_uuid,omitempty"`
-	LocationUUID  string `json:"locationtime_uuid,omitempty"`
-	EpisodeID     int    `json:"episode_id,omitempty"`
-	EpisodeNumber int    `json:"episode_number,omitempty"`
-	Title         string `json:"title,omitempty"`
-	Name          string `json:"name,omitempty"`
-	VideoStatus   string `json:"video_status,omitempty"`
-	VideoURL      string `json:"video_url,omitempty"`
-	ImageStatus   string `json:"image_status,omitempty"`
-	ImageURL      string `json:"image_url,omitempty"`
-	SortOrder     int    `json:"sort_order,omitempty"`
+	ID             int    `json:"id"`
+	EpisodeUUID    string `json:"episode_uuid,omitempty"`
+	ShotUUID       string `json:"shot_uuid,omitempty"`
+	CharacterUUID  string `json:"character_uuid,omitempty"`
+	LocationUUID   string `json:"locationtime_uuid,omitempty"`
+	CharacterName  string `json:"character_name,omitempty"`
+	Description    string `json:"description,omitempty"`
+	Location       string `json:"location,omitempty"`
+	TimeOfDay      string `json:"time_of_day,omitempty"`
+	EpisodeID      int    `json:"episode_id,omitempty"`
+	EpisodeNumber  int    `json:"episode_number,omitempty"`
+	Title          string `json:"title,omitempty"`
+	Name           string `json:"name,omitempty"`
+	VideoStatus    string `json:"video_status,omitempty"`
+	VideoURL       string `json:"video_url,omitempty"`
+	ImageStatus    string `json:"image_status,omitempty"`
+	ImageURL       string `json:"image_url,omitempty"`
+	TTSStatus      string `json:"tts_status,omitempty"`
+	SortOrder      int    `json:"sort_order,omitempty"`
 }
 
 // ParsedCanvas is a convenience struct extracted from CanvasData.

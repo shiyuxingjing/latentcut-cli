@@ -33,9 +33,9 @@ func NewProduceCmd() *cobra.Command {
 		Use:   "produce <input-file>",
 		Short: "Produce short drama video from a novel text file via latentCut-server",
 		Long:  "Reads a novel text file and produces short drama videos through latentCut-server: AI parsing, asset generation, video production, and episode assembly.",
-		Example: `  novelo-cli produce novel.txt
-  novelo-cli produce novel.txt --style "精致国漫/仙侠风"
-  novelo-cli produce novel.txt --output-dir ./my-drama --no-merge`,
+		Example: `  latentcut produce novel.txt
+  latentcut produce novel.txt --style "精致国漫/仙侠风"
+  latentcut produce novel.txt --output-dir ./my-drama --no-merge`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runProduce(args[0], style, outputDir, noMerge)
@@ -60,7 +60,7 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 	}
 
 	if cfg.EffectiveToken() == "" {
-		return fmt.Errorf("not logged in. Run: novelo-cli login")
+		return fmt.Errorf("not logged in. Run: latentcut login")
 	}
 
 	// 2. Read input file

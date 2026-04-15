@@ -9,11 +9,11 @@ var (
 	jsonOut bool
 )
 
-// rootCmd is the base command for novelo-cli.
+// rootCmd is the base command for latentcut.
 var rootCmd = &cobra.Command{
-	Use:   "novelo-cli",
+	Use:   "latentcut",
 	Short: "Novelo AI pipeline CLI",
-	Long:  "novelo-cli triggers the Novelo AI novel-to-drama pipeline and streams real-time progress.",
+	Long:  "latentcut triggers the Novelo AI novel-to-drama pipeline and streams real-time progress.",
 }
 
 // Execute runs the root command.
@@ -33,4 +33,9 @@ func init() {
 	rootCmd.AddCommand(NewRechargeCmd())
 	rootCmd.AddCommand(NewConfigCmd())
 	rootCmd.AddCommand(NewVersionCmd())
+	rootCmd.AddCommand(NewProjectCmd())
+	rootCmd.AddCommand(NewStatusCmd())
+	rootCmd.AddCommand(NewGenerateCmd())
+	rootCmd.AddCommand(NewInstallCmd())
+	rootCmd.AddCommand(NewOpenCmd())
 }

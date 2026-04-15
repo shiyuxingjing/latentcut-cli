@@ -30,10 +30,10 @@ func NewRunCmd() *cobra.Command {
 		Use:   "run <input-file>",
 		Short: "Run the Novelo AI pipeline on an input file",
 		Long:  "Reads a novel text file and runs the full Novelo AI pipeline: narration rewrite, episode split, asset extraction, and shot/video generation.",
-		Example: `  novelo-cli run input.txt
-  novelo-cli run input.txt --style cinematic --output-dir ./output
-  novelo-cli run input.txt --json
-  novelo-cli run input.txt --no-merge`,
+		Example: `  latentcut run input.txt
+  latentcut run input.txt --style cinematic --output-dir ./output
+  latentcut run input.txt --json
+  latentcut run input.txt --no-merge`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runPipeline(args[0], style, outputDir, noMerge, serverURL)
@@ -66,7 +66,7 @@ func runPipeline(inputFile, style, outputDir string, noMerge bool, serverURLFlag
 	}
 
 	if cfg.APIKey == "" {
-		return fmt.Errorf("API key not set. Run: novelo-cli config set api-key <your-key>")
+		return fmt.Errorf("API key not set. Run: latentcut config set api-key <your-key>")
 	}
 
 	// 2. Read input file

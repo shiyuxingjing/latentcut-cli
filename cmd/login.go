@@ -20,8 +20,8 @@ func NewLoginCmd() *cobra.Command {
 		Use:   "login",
 		Short: "Configure API key for latentCut-server",
 		Long:  "Set your API key for authenticating with latentCut-server. Get your API key from https://shiyuxingjing.com",
-		Example: `  novelo-cli login --api-key nv-abc123...
-  novelo-cli login  (interactive prompt)`,
+		Example: `  latentcut login --api-key nv-abc123...
+  latentcut login  (interactive prompt)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runLogin(apiKey)
 		},
