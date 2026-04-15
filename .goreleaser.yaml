@@ -1,8 +1,8 @@
 version: 2
-project_name: novelo-cli
+project_name: latentcut
 builds:
   - main: ./main.go
-    binary: novelo-cli
+    binary: latentcut
     env:
       - CGO_ENABLED=0
     goos:
@@ -27,7 +27,7 @@ checksum:
   name_template: checksums.txt
 release:
   github:
-    owner: novelo-ai
-    name: novelo-cli
+    owner: shiyuxingjing
+    name: latentcut-cli
 changelog:
   sort: asc
