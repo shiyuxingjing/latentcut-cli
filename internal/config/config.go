@@ -9,14 +9,14 @@ import (
 
 // Config holds all persistent CLI configuration.
 type Config struct {
-	APIKey           string `yaml:"api_key"`
-	ServerURL        string `yaml:"server_url"`
-	OutputDir        string `yaml:"output_dir"`
-	LatentCutURL     string `yaml:"latentcut_url"`
-	Token            string `yaml:"token"`
-	APIKeyLatentCut  string `yaml:"api_key_latentcut"`
-	Account          string `yaml:"account"`
-	LastThreadID     string `yaml:"last_thread_id,omitempty"`
+	APIKey          string `yaml:"api_key"`
+	ServerURL       string `yaml:"server_url"`
+	OutputDir       string `yaml:"output_dir"`
+	LatentCutURL    string `yaml:"latentcut_url"`
+	Token           string `yaml:"token"`
+	APIKeyLatentCut string `yaml:"api_key_latentcut"`
+	Account         string `yaml:"account"`
+	LastThreadID    string `yaml:"last_thread_id,omitempty"`
 }
 
 // EffectiveToken returns the API key to use for latentCut-server requests.
@@ -42,7 +42,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		ServerURL:    "http://localhost:4111",
 		OutputDir:    "novelo-output",
-		LatentCutURL: "http://shiyuxingjing.com",
+		LatentCutURL: "https://api.shiyuxingjing.com",
 	}
 
 	path := DefaultConfigPath()
@@ -66,7 +66,7 @@ func Load() (*Config, error) {
 		cfg.OutputDir = "novelo-output"
 	}
 	if cfg.LatentCutURL == "" {
-		cfg.LatentCutURL = "http://localhost:7001"
+		cfg.LatentCutURL = "https://api.shiyuxingjing.com"
 	}
 
 	return cfg, nil

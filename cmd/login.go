@@ -6,105 +6,89 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
 
 	"github.com/novelo-ai/novelo-cli/internal/config"
 	"github.com/novelo-ai/novelo-cli/internal/latentcut"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 // NewLoginCmd returns the login subcommand.
 func NewLoginCmd() *cobra.Command {
-	var (
-		account  string
-		password string
-	)
+	var apiKey string
 
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Login to latentCut-server and save JWT token",
-		Example: `  novelo-cli login --account user@example.com --password mypass
+		Short: "Configure API key for latentCut-server",
+		Long:  "Set your API key for authenticating with latentCut-server. Get your API key from https://shiyuxingjing.com",
+		Example: `  novelo-cli login --api-key nv-abc123...
   novelo-cli login  (interactive prompt)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLogin(account, password)
+			return runLogin(apiKey)
 		},
 	}
 
-	cmd.Flags().StringVar(&account, "account", "", "Account (email or username)")
-	cmd.Flags().StringVar(&password, "password", "", "Password")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key (starts with nv-)")
 
 	return cmd
 }
 
-func runLogin(account, password string) error {
+func runLogin(apiKey string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	// Interactive prompts for missing fields
-	reader := bufio.NewReader(os.Stdin)
-	if account == "" {
-		if cfg.Account != "" {
-			fmt.Fprintf(os.Stderr, "Account [%s]: ", cfg.Account)
+	// Interactive prompt if no API key provided
+	if apiKey == "" {
+		fmt.Fprintln(os.Stderr, "Enter your API key (get one from https://shiyuxingjing.com):")
+		if cfg.APIKeyLatentCut != "" {
+			masked := maskAPIKey(cfg.APIKeyLatentCut)
+			fmt.Fprintf(os.Stderr, "API Key [%s]: ", masked)
 		} else {
-			fmt.Fprint(os.Stderr, "Account: ")
+			fmt.Fprint(os.Stderr, "API Key: ")
 		}
+		reader := bufio.NewReader(os.Stdin)
 		line, _ := reader.ReadString('\n')
-		account = strings.TrimSpace(line)
-		if account == "" {
-			account = cfg.Account
+		apiKey = strings.TrimSpace(line)
+		if apiKey == "" {
+			if cfg.APIKeyLatentCut != "" {
+				fmt.Fprintln(os.Stderr, "Keeping existing API key.")
+				return nil
+			}
+			return fmt.Errorf("API key is required")
 		}
 	}
-	if account == "" {
-		return fmt.Errorf("account is required")
+
+	// Validate prefix
+	if !strings.HasPrefix(apiKey, "nv-") {
+		fmt.Fprintln(os.Stderr, "Warning: API key does not start with 'nv-' prefix. Proceeding anyway.")
 	}
 
-	if password == "" {
-		fmt.Fprint(os.Stderr, "Password: ")
-		pwBytes, err := term.ReadPassword(int(syscall.Stdin))
-		fmt.Fprintln(os.Stderr)
-		if err != nil {
-			return fmt.Errorf("read password: %w", err)
-		}
-		password = string(pwBytes)
-	}
-	if password == "" {
-		return fmt.Errorf("password is required")
-	}
-
-	client := latentcut.NewClient(cfg.LatentCutURL, "")
-	ctx := context.Background()
-
-	fmt.Fprintf(os.Stderr, "Logging in to %s...\n", cfg.LatentCutURL)
-
-	loginData, err := client.Login(ctx, account, password)
-	if err != nil {
-		return fmt.Errorf("login failed: %w", err)
-	}
-
-	// Use the JWT to create a persistent API key
-	fmt.Fprintf(os.Stderr, "Creating API key...\n")
-	apiKeyData, err := client.CreateAPIKey(ctx, loginData.Token, "novelo-cli")
-	if err != nil {
-		return fmt.Errorf("create API key failed: %w", err)
-	}
-
-	// Save API key as the primary auth credential; discard JWT
-	cfg.APIKeyLatentCut = apiKeyData.APIKey
-	cfg.Token = ""
-	cfg.Account = account
+	// Save API key
+	cfg.APIKeyLatentCut = apiKey
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
 
-	// Show masked key: first 6 chars + **** + last 4 chars
-	key := apiKeyData.APIKey
-	masked := key
-	if len(key) > 10 {
-		masked = key[:6] + "..." + key[len(key)-4:]
+	// Verify the API key by fetching credit balance
+	fmt.Fprintf(os.Stderr, "Verifying API key with %s...\n", cfg.LatentCutURL)
+	client := latentcut.NewClient(cfg.LatentCutURL, apiKey)
+	_, err = client.GetCreditsBalance(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: API key saved but verification failed: %v\n", err)
+		fmt.Fprintln(os.Stderr, "The key has been saved. If the server is not reachable, it may still work later.")
+	} else {
+		fmt.Fprintln(os.Stderr, "API key verified and saved successfully!")
 	}
-	fmt.Fprintf(os.Stderr, "Logged in and API key created: %s\n", masked)
+
+	fmt.Fprintf(os.Stderr, "Config: %s\n", config.DefaultConfigPath())
 	return nil
+}
+
+// maskAPIKey masks an API key for display (show first 6 + last 4 chars).
+func maskAPIKey(key string) string {
+	if len(key) > 10 {
+		return key[:6] + "..." + key[len(key)-4:]
+	}
+	return "****"
 }
