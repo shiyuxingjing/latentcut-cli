@@ -35,7 +35,12 @@ func init() {
 	rootCmd.AddCommand(NewVersionCmd())
 	rootCmd.AddCommand(NewProjectCmd())
 	rootCmd.AddCommand(NewStatusCmd())
+	rootCmd.AddCommand(NewProgressCmd())
 	rootCmd.AddCommand(NewGenerateCmd())
 	rootCmd.AddCommand(NewInstallCmd())
 	rootCmd.AddCommand(NewOpenCmd())
+	rootCmd.AddCommand(NewNextCmd())
+	rootCmd.AddCommand(NewGalleryCmd())
+	rootCmd.AddCommand(NewPlanCmd())
+	rootCmd.AddCommand(NewShotVideoCmd())
 }

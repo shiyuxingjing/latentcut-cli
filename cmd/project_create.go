@@ -18,6 +18,7 @@ import (
 
 func newProjectCreateCmd() *cobra.Command {
 	var style string
+	var noWait bool
 
 	cmd := &cobra.Command{
 		Use:   "create <input-file>",
@@ -28,16 +29,17 @@ func newProjectCreateCmd() *cobra.Command {
   latentcut project create novel.txt --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runProjectCreate(args[0], style)
+			return runProjectCreate(args[0], style, noWait)
 		},
 	}
 
 	cmd.Flags().StringVar(&style, "style", "", "Visual style (e.g. 精致国漫/仙侠风, 写实风格)")
+	cmd.Flags().BoolVar(&noWait, "wait", false, "Wait for AI parsing to complete (synchronous)")
 
 	return cmd
 }
 
-func runProjectCreate(inputFile, style string) error {
+func runProjectCreate(inputFile, style string, wait bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
@@ -83,6 +85,21 @@ func runProjectCreate(inputFile, style string) error {
 	taskUUID := projectData.TaskUUID
 	fmt.Fprintf(os.Stderr, "Project: %s\nTask: %s\n", projectUUID, taskUUID)
 
+	if !wait {
+		if jsonOut {
+			out := map[string]any{
+				"project_uuid": projectUUID,
+				"task_uuid":    taskUUID,
+			}
+			data, _ := json.Marshal(out)
+			fmt.Println(string(data))
+		} else {
+			fmt.Fprintf(os.Stdout, "\nProject created: %s\n", projectUUID)
+			fmt.Fprintln(os.Stdout, "Wait skipped. AI parsing running in background.")
+		}
+		return nil
+	}
+
 	// Wait for AI parsing via SSE
 	fmt.Fprintln(os.Stderr, "\nWaiting for AI parsing...")
 	bar := newProgressBar("AI Parsing")
@@ -98,7 +115,7 @@ func runProjectCreate(inputFile, style string) error {
 				updateBar(bar, int(p.Progress), p.CurrentStep)
 			}
 		case latentcut.EventDramaDone:
-			_ = bar.Finish()
+			finishBar(bar)
 			fmt.Fprintln(os.Stderr, "\nAI parsing complete!")
 			dramaDone = true
 			return false

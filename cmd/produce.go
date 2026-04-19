@@ -21,6 +21,34 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// emitEvent writes one JSONL event to stdout when --json is set.
+// In TUI mode it is a no-op; the TUI keeps using stderr + progressbar.
+// Field "t" holds the event type; "timestamp" is seconds since epoch.
+// Agents polling `produce --json` read these line-by-line.
+func emitEvent(evtType string, fields map[string]any) {
+	if !jsonOut {
+		return
+	}
+	if fields == nil {
+		fields = map[string]any{}
+	}
+	fields["t"] = evtType
+	fields["timestamp"] = time.Now().Unix()
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return
+	}
+	fmt.Println(string(data))
+}
+
+// finishBar safely finishes a progressbar that may be nil (JSONL mode).
+func finishBar(bar *progressbar.ProgressBar) {
+	if bar == nil {
+		return
+	}
+	_ = bar.Finish()
+}
+
 // NewProduceCmd returns the produce subcommand.
 func NewProduceCmd() *cobra.Command {
 	var (
@@ -92,16 +120,24 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 
 	// 4. Create project
 	fmt.Fprintf(os.Stderr, "Creating project \"%s\" on %s...\n", title, cfg.LatentCutURL)
+	emitEvent("project.create.start", map[string]any{"title": title, "style": style, "server": cfg.LatentCutURL})
 	projectData, err := client.CreateProject(ctx, title, novelContent, style)
 	if err != nil {
+		emitEvent("error", map[string]any{"stage": "project.create", "error": err.Error()})
 		return fmt.Errorf("create project: %w", err)
 	}
 	projectUUID := projectData.ProjectUUID
 	taskUUID := projectData.TaskUUID
 	fmt.Fprintf(os.Stderr, "Project: %s\nTask: %s\n", projectUUID, taskUUID)
+	emitEvent("project.created", map[string]any{
+		"project_uuid": projectUUID,
+		"task_uuid":    taskUUID,
+		"title":        title,
+	})
 
 	// 5. Subscribe to SSE for AI parsing progress
 	fmt.Fprintln(os.Stderr, "\n--- Phase 1: AI Parsing ---")
+	emitEvent("phase.start", map[string]any{"phase": "parse", "name": "AI Parsing"})
 	bar := newProgressBar("Parsing novel")
 
 	dramaDone := false
@@ -113,18 +149,32 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 			var p latentcut.DramaProgressEvent
 			if json.Unmarshal([]byte(event.Data), &p) == nil {
 				updateBar(bar, int(p.Progress), p.CurrentStep)
+				emitEvent("phase.progress", map[string]any{
+					"phase":    "parse",
+					"progress": p.Progress,
+					"step":     p.CurrentStep,
+					"stage":    p.Stage,
+				})
 			}
 		case latentcut.EventDramaDone:
-			_ = bar.Finish()
+			finishBar(bar)
 			fmt.Fprintln(os.Stderr, "\nAI parsing complete!")
+			emitEvent("phase.done", map[string]any{"phase": "parse"})
 			dramaDone = true
 			return false
 		case latentcut.EventDramaFailed:
 			var f latentcut.DramaFailedEvent
 			if json.Unmarshal([]byte(event.Data), &f) == nil {
 				dramaErr = fmt.Errorf("AI parsing failed: %s (stage: %s)", f.Error, f.Stage)
+				emitEvent("phase.error", map[string]any{
+					"phase": "parse",
+					"error": f.Error,
+					"stage": f.Stage,
+					"step":  f.CurrentStep,
+				})
 			} else {
 				dramaErr = fmt.Errorf("AI parsing failed: %s", event.Data)
+				emitEvent("phase.error", map[string]any{"phase": "parse", "error": event.Data})
 			}
 			return false
 		}
@@ -148,13 +198,29 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 	parsed := canvas.ParseCanvas()
 	fmt.Fprintf(os.Stderr, "  %d episodes, %d shots, %d characters, %d locations\n",
 		len(parsed.Episodes), len(parsed.Shots), parsed.Characters, parsed.Locations)
+	emitEvent("structure", map[string]any{
+		"episodes":   len(parsed.Episodes),
+		"shots":      len(parsed.Shots),
+		"characters": parsed.Characters,
+		"locations":  parsed.Locations,
+	})
 
 	if len(parsed.Shots) == 0 {
+		emitEvent("error", map[string]any{"stage": "structure", "error": "no shots after parsing"})
 		return fmt.Errorf("no shots found in project — AI parsing may have produced empty results")
 	}
 
 	// 7. Generate prerequisite assets (character images, voices, location images)
 	fmt.Fprintln(os.Stderr, "\n--- Phase 2a: Character & Location Assets ---")
+	emitEvent("phase.start", map[string]any{
+		"phase": "assets",
+		"name":  "Character & Location Assets",
+		"totals": map[string]any{
+			"character_images": len(parsed.CharacterUUIDs),
+			"character_voices": len(parsed.CharacterUUIDs),
+			"location_images":  len(parsed.LocationUUIDs),
+		},
+	})
 
 	if len(parsed.CharacterUUIDs) > 0 {
 		fmt.Fprintf(os.Stderr, "  Generating %d character images...\n", len(parsed.CharacterUUIDs))
@@ -211,17 +277,26 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 			if totalAssets > 0 {
 				pct := (done * 100) / totalAssets
 				updateBar(assetBar, pct, fmt.Sprintf("%d/%d assets", done, totalAssets))
+				emitEvent("phase.progress", map[string]any{
+					"phase":     "assets",
+					"done":      done,
+					"total":     totalAssets,
+					"remaining": remaining,
+					"progress":  pct,
+				})
 			}
 			if remaining == 0 {
 				break
 			}
 		}
-		_ = assetBar.Finish()
+		finishBar(assetBar)
 		fmt.Fprintln(os.Stderr, "\n  Character & location assets ready!")
+		emitEvent("phase.done", map[string]any{"phase": "assets"})
 	}
 
 	// 8. Preview and trigger batch generation
 	fmt.Fprintln(os.Stderr, "\n--- Phase 2b: Shot Generation (keyframes + audio + video) ---")
+	emitEvent("phase.start", map[string]any{"phase": "shot_generation", "name": "Shot Generation"})
 
 	preview, err := client.PreviewShotBatch(ctx, projectUUID)
 	if err != nil {
@@ -229,6 +304,10 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 	} else {
 		fmt.Fprintf(os.Stderr, "  %d shots to generate, estimated cost: %d credits\n",
 			len(preview.Candidates), preview.TotalCredits)
+		emitEvent("shot_batch.preview", map[string]any{
+			"candidates":    len(preview.Candidates),
+			"total_credits": preview.TotalCredits,
+		})
 	}
 
 	if preview != nil && len(preview.Candidates) == 0 {
@@ -240,9 +319,15 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 
 	batchData, err := client.CreateShotBatch(ctx, projectUUID, "all", 0)
 	if err != nil {
+		emitEvent("error", map[string]any{"stage": "shot_batch.create", "error": err.Error()})
 		return fmt.Errorf("create shot batch: %w", err)
 	}
 	fmt.Fprintf(os.Stderr, "  Batch started: %d shots accepted\n", batchData.AcceptedCount)
+	emitEvent("shot_batch.started", map[string]any{
+		"batch_id":       batchData.BatchID,
+		"accepted_count": batchData.AcceptedCount,
+		"estimated_cost": batchData.EstimatedCost,
+	})
 
 	// 9. Poll for batch generation completion
 	genBar := newProgressBar("Generating assets")
@@ -250,11 +335,13 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 	if err != nil {
 		return fmt.Errorf("generation: %w", err)
 	}
-	_ = genBar.Finish()
+	finishBar(genBar)
 	fmt.Fprintln(os.Stderr, "\nAsset generation complete!")
+	emitEvent("phase.done", map[string]any{"phase": "shot_generation"})
 
 	// 9. Generate episode videos
 	fmt.Fprintln(os.Stderr, "\n--- Phase 3: Episode Video Assembly ---")
+	emitEvent("phase.start", map[string]any{"phase": "episode_assembly", "name": "Episode Video Assembly"})
 	// Re-fetch canvas to get latest shot statuses
 	canvas, err = client.GetCanvasData(ctx, projectUUID)
 	if err != nil {
@@ -326,10 +413,20 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 
 		if epDone {
 			fmt.Fprintf(os.Stderr, "    Done!\n")
+			emitEvent("episode.done", map[string]any{
+				"episode_uuid":   ep.UUID,
+				"episode_number": i + 1,
+				"title":          ep.Title,
+			})
 		} else {
 			fmt.Fprintf(os.Stderr, "    Timeout waiting for episode video\n")
+			emitEvent("episode.timeout", map[string]any{
+				"episode_uuid":   ep.UUID,
+				"episode_number": i + 1,
+			})
 		}
 	}
+	emitEvent("phase.done", map[string]any{"phase": "episode_assembly"})
 
 	if len(episodeVideoURLs) == 0 {
 		fmt.Fprintln(os.Stderr, "\nNo episode videos were produced.")
@@ -344,8 +441,19 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 	}
 
 	if noMerge {
-		for _, url := range episodeVideoURLs {
-			fmt.Println(url)
+		// In JSONL mode, emit a structured done event and skip the
+		// plaintext URL lines so stdout stays valid JSONL. In TUI mode,
+		// keep printing URLs on stdout (backward compatible with scripts).
+		if jsonOut {
+			emitEvent("done", map[string]any{
+				"project_uuid":       projectUUID,
+				"episode_video_urls": episodeVideoURLs,
+				"merged":             false,
+			})
+		} else {
+			for _, url := range episodeVideoURLs {
+				fmt.Println(url)
+			}
 		}
 		return nil
 	}
@@ -393,6 +501,12 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 
 	if len(downloadedFiles) == 1 {
 		fmt.Fprintf(os.Stderr, "\nOutput: %s\n", downloadedFiles[0])
+		emitEvent("done", map[string]any{
+			"project_uuid":       projectUUID,
+			"episode_video_urls": episodeVideoURLs,
+			"output":             downloadedFiles[0],
+			"merged":             false,
+		})
 		return nil
 	}
 
@@ -400,10 +514,17 @@ func runProduce(inputFile, style, outputDir string, noMerge bool) error {
 	outputPath := filepath.Join(cfg.OutputDir, "drama.mp4")
 	fmt.Fprintf(os.Stderr, "Merging %d episodes into %s...\n", len(downloadedFiles), outputPath)
 	if err := merge.MergeVideos(ctx, ffmpegPath, downloadedFiles, outputPath); err != nil {
+		emitEvent("error", map[string]any{"stage": "merge", "error": err.Error()})
 		return fmt.Errorf("merge: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "\nOutput: %s\n", outputPath)
+	emitEvent("done", map[string]any{
+		"project_uuid":       projectUUID,
+		"episode_video_urls": episodeVideoURLs,
+		"output":             outputPath,
+		"merged":             true,
+	})
 	return nil
 }
 
@@ -449,6 +570,19 @@ func waitForGeneration(ctx context.Context, client *latentcut.Client, projectUUI
 			pct = (done * 100) / initialTotal
 		}
 		updateBar(bar, pct, fmt.Sprintf("%d/%d tasks done", done, initialTotal))
+		// Aggregate remaining tasks by type for agent visibility
+		byType := map[string]int{}
+		for _, t := range tasks {
+			byType[t.TaskType]++
+		}
+		emitEvent("phase.progress", map[string]any{
+			"phase":         "shot_generation",
+			"done":          done,
+			"total":         initialTotal,
+			"remaining":     remaining,
+			"progress":      pct,
+			"remaining_by_type": byType,
+		})
 
 		select {
 		case <-ctx.Done():
@@ -459,6 +593,9 @@ func waitForGeneration(ctx context.Context, client *latentcut.Client, projectUUI
 }
 
 func newProgressBar(desc string) *progressbar.ProgressBar {
+	if jsonOut {
+		return nil
+	}
 	return progressbar.NewOptions(100,
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionSetWidth(40),
@@ -474,6 +611,9 @@ func newProgressBar(desc string) *progressbar.ProgressBar {
 }
 
 func updateBar(bar *progressbar.ProgressBar, pct int, desc string) {
+	if bar == nil {
+		return
+	}
 	if desc != "" {
 		bar.Describe("  " + desc)
 	}

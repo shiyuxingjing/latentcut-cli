@@ -437,6 +437,211 @@ func (c *Client) DeleteProject(ctx context.Context, projectUUID string) error {
 	return err
 }
 
+// GetProjectProgress fetches the flat progress snapshot for a project.
+//
+// It first tries GET /api/projects/:uuid/progress (added in server >= 2026-04).
+// On older servers that return 404 for the new route, it falls back to
+// composing a snapshot from existing endpoints (project list + pending tasks).
+// This keeps the CLI usable against both current and future servers without
+// requiring a coordinated release.
+func (c *Client) GetProjectProgress(ctx context.Context, projectUUID string) (*ProjectProgress, error) {
+	_, raw, err := c.doJSON(ctx, http.MethodGet, "/api/projects/"+projectUUID+"/progress", nil)
+	if err == nil {
+		return decodeData[ProjectProgress](raw)
+	}
+	// Fallback path for servers without the new endpoint.
+	// We detect "route not found" either as HTTP 404 or as server
+	// payloads that include "404", "not found" or "ROUTE_NOT_FOUND".
+	msg := strings.ToLower(err.Error())
+	isRouteMissing := strings.Contains(msg, "404") ||
+		strings.Contains(msg, "not found") ||
+		strings.Contains(msg, "route_not_found")
+	if !isRouteMissing {
+		return nil, err
+	}
+	return c.composeProjectProgress(ctx, projectUUID)
+}
+
+// composeProjectProgress fabricates a ProjectProgress from legacy endpoints
+// (list projects + pending tasks). Used when the dedicated /progress route
+// is missing. Slower (2 requests instead of 1) but functionally equivalent.
+func (c *Client) composeProjectProgress(ctx context.Context, projectUUID string) (*ProjectProgress, error) {
+	projects, err := c.ListProjects(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list projects for progress: %w", err)
+	}
+	var p map[string]any
+	for _, item := range projects {
+		if getStr(item, "project_uuid") == projectUUID {
+			p = item
+			break
+		}
+	}
+	if p == nil {
+		return nil, fmt.Errorf("project %s not found", projectUUID)
+	}
+
+	tasks, err := c.GetPendingTasks(ctx, projectUUID)
+	if err != nil {
+		// Non-fatal: we can still report the snapshot without task info.
+		tasks = nil
+	}
+
+	byType := map[string]int{}
+	byStatus := map[string]int{}
+	for _, t := range tasks {
+		byType[t.TaskType]++
+		byStatus[t.TaskStatus]++
+	}
+
+	metadata, _ := p["metadata"].(map[string]any)
+	assetParse := buildPhaseState(metadata, "asset_parse")
+	shotParse := buildPhaseState(metadata, "shot_parse")
+
+	// Derive current_phase with the same rules as the server endpoint so
+	// the fallback output shape stays consistent.
+	status := getStr(p, "status")
+	currentPhase := "unknown"
+	var phaseStep string
+	var phaseProgress *float64
+	switch status {
+	case "completed":
+		currentPhase = "completed"
+	case "failed":
+		currentPhase = "failed"
+	default:
+		if assetParse != nil && assetParse.Status != "completed" {
+			currentPhase = "asset_parse"
+			phaseStep = assetParse.CurrentStep
+			phaseProgress = assetParse.Progress
+		} else if shotParse != nil && shotParse.Status != "" && shotParse.Status != "completed" {
+			currentPhase = "shot_parse"
+			phaseStep = shotParse.CurrentStep
+			phaseProgress = shotParse.Progress
+		} else if len(tasks) > 0 {
+			top := ""
+			best := 0
+			for t, n := range byType {
+				if n > best {
+					top, best = t, n
+				}
+			}
+			if top != "" {
+				currentPhase = "generating:" + top
+			} else {
+				currentPhase = "generating"
+			}
+		} else {
+			currentPhase = "idle"
+		}
+	}
+
+	snapshot := &ProjectProgress{
+		ProjectUUID:     projectUUID,
+		Title:           getStr(p, "title"),
+		Status:          status,
+		OverallProgress: getFloat(p, "progress"),
+		CurrentPhase:    currentPhase,
+		PhaseStep:       phaseStep,
+		PhaseProgress:   phaseProgress,
+		Episodes: ProjectProgressEpisodes{
+			Total:  int(getFloat(p, "episode_count")),
+			Parsed: nil,
+		},
+		Shots: ProjectProgressShots{
+			Total: int(getFloat(p, "shot_count")),
+		},
+		AssetParse: assetParse,
+		ShotParse:  shotParse,
+		PendingTasks: PendingTasksSummary{
+			Total:    len(tasks),
+			ByType:   byType,
+			ByStatus: byStatus,
+		},
+		UpdatedAt: getStr(p, "updated_at"),
+	}
+
+	if assetParse != nil && assetParse.CompletedEpisodes != nil {
+		v := *assetParse.CompletedEpisodes
+		snapshot.Episodes.Parsed = &v
+	}
+
+	return snapshot, nil
+}
+
+// buildPhaseState extracts a phase-state sub-object from project metadata.
+func buildPhaseState(metadata map[string]any, key string) *ProjectPhaseState {
+	if metadata == nil {
+		return nil
+	}
+	raw, ok := metadata[key].(map[string]any)
+	if !ok {
+		return nil
+	}
+	ps := &ProjectPhaseState{
+		Status:       getStr(raw, "status"),
+		CurrentStep:  getStr(raw, "current_step"),
+		ErrorMessage: getStr(raw, "error_message"),
+		UpdatedAt:    getStr(raw, "updated_at"),
+	}
+	if v, ok := raw["progress"]; ok {
+		if f, ok := toFloat(v); ok {
+			ps.Progress = &f
+		}
+	}
+	if v, ok := raw["completed_episodes"]; ok {
+		if f, ok := toFloat(v); ok {
+			n := int(f)
+			ps.CompletedEpisodes = &n
+		}
+	}
+	if v, ok := raw["total_episodes"]; ok {
+		if f, ok := toFloat(v); ok {
+			n := int(f)
+			ps.TotalEpisodes = &n
+		}
+	}
+	if v, ok := raw["retryEligible"].(bool); ok {
+		ps.RetryEligible = &v
+	}
+	return ps
+}
+
+func getStr(m map[string]any, k string) string {
+	if v, ok := m[k]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func getFloat(m map[string]any, k string) float64 {
+	if v, ok := m[k]; ok {
+		if f, ok := toFloat(v); ok {
+			return f
+		}
+	}
+	return 0
+}
+
+func toFloat(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case json.Number:
+		f, err := x.Float64()
+		return f, err == nil
+	}
+	return 0, false
+}
+
 // GenerateKeyframeImage triggers keyframe image generation.
 func (c *Client) GenerateKeyframeImage(ctx context.Context, projectUUID, keyframeUUID string) error {
 	_, _, err := c.doJSON(ctx, http.MethodPost, "/api/projects/"+projectUUID+"/generate/keyframe-image", map[string]string{
@@ -467,4 +672,51 @@ func (c *Client) GenerateShotStoryboard(ctx context.Context, projectUUID, shotUU
 		"shotUuid": shotUUID,
 	})
 	return err
+}
+
+// GetAssistantSummary calls GET /api/projects/:uuid/assistant-summary
+func (c *Client) GetAssistantSummary(ctx context.Context, projectUUID string) (*AssistantSummary, error) {
+	_, raw, err := c.doJSON(ctx, http.MethodGet, "/api/projects/"+projectUUID+"/assistant-summary", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeData[AssistantSummary](raw)
+}
+
+// GetGallery calls GET /api/projects/:uuid/gallery
+func (c *Client) GetGallery(ctx context.Context, projectUUID string) (*Gallery, error) {
+	_, raw, err := c.doJSON(ctx, http.MethodGet, "/api/projects/"+projectUUID+"/gallery", nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeData[Gallery](raw)
+}
+
+// GetResourceDetail calls GET /api/projects/:uuid/resources/:resourceUuid
+func (c *Client) GetResourceDetail(ctx context.Context, projectUUID, resourceUUID string) (*GalleryResource, error) {
+	_, raw, err := c.doJSON(ctx, http.MethodGet, "/api/projects/"+projectUUID+"/resources/"+resourceUUID, nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeData[GalleryResource](raw)
+}
+
+// PreviewWorkflow calls POST /api/projects/:uuid/workflows/preview
+func (c *Client) PreviewWorkflow(ctx context.Context, projectUUID string, req WorkflowPreviewRequest) (*WorkflowPreview, error) {
+	_, raw, err := c.doJSON(ctx, http.MethodPost, "/api/projects/"+projectUUID+"/workflows/preview", req)
+	if err != nil {
+		return nil, err
+	}
+	return decodeData[WorkflowPreview](raw)
+}
+
+// ExecuteWorkflow calls POST /api/projects/:uuid/workflows/execute
+func (c *Client) ExecuteWorkflow(ctx context.Context, projectUUID, previewID string) (*WorkflowExecution, error) {
+	_, raw, err := c.doJSON(ctx, http.MethodPost, "/api/projects/"+projectUUID+"/workflows/execute", map[string]string{
+		"previewId": previewID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return decodeData[WorkflowExecution](raw)
 }

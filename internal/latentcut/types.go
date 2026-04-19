@@ -316,3 +316,53 @@ type ResourceDoneEvent struct {
 	EntityType  string `json:"entityType"`
 	FileURL     string `json:"fileUrl"`
 }
+
+// ProjectProgress is the flat progress snapshot returned by
+// GET /api/projects/:uuid/progress. It is designed to be the single
+// source of truth that agents/CLIs need to compute and display
+// pipeline progress in one round trip.
+type ProjectProgress struct {
+	ProjectUUID     string                  `json:"project_uuid"`
+	Title           string                  `json:"title"`
+	Status          string                  `json:"status"`
+	OverallProgress float64                 `json:"overall_progress"`
+	CurrentPhase    string                  `json:"current_phase"`
+	PhaseStep       string                  `json:"phase_step"`
+	PhaseProgress   *float64                `json:"phase_progress"`
+	Episodes        ProjectProgressEpisodes `json:"episodes"`
+	Shots           ProjectProgressShots    `json:"shots"`
+	AssetParse      *ProjectPhaseState      `json:"asset_parse,omitempty"`
+	ShotParse       *ProjectPhaseState      `json:"shot_parse,omitempty"`
+	PendingTasks    PendingTasksSummary     `json:"pending_tasks"`
+	UpdatedAt       string                  `json:"updated_at"`
+}
+
+// ProjectProgressEpisodes is the episode roll-up inside a progress snapshot.
+type ProjectProgressEpisodes struct {
+	Total  int  `json:"total"`
+	Parsed *int `json:"parsed"`
+}
+
+// ProjectProgressShots is the shot roll-up inside a progress snapshot.
+type ProjectProgressShots struct {
+	Total int `json:"total"`
+}
+
+// ProjectPhaseState mirrors metadata.asset_parse / metadata.shot_parse.
+type ProjectPhaseState struct {
+	Status            string   `json:"status"`
+	Progress          *float64 `json:"progress"`
+	CurrentStep       string   `json:"current_step"`
+	CompletedEpisodes *int     `json:"completed_episodes,omitempty"`
+	TotalEpisodes     *int     `json:"total_episodes,omitempty"`
+	RetryEligible     *bool    `json:"retry_eligible,omitempty"`
+	ErrorMessage      string   `json:"error_message,omitempty"`
+	UpdatedAt         string   `json:"updated_at,omitempty"`
+}
+
+// PendingTasksSummary is the aggregated view of pending generation tasks.
+type PendingTasksSummary struct {
+	Total    int            `json:"total"`
+	ByType   map[string]int `json:"by_type"`
+	ByStatus map[string]int `json:"by_status"`
+}

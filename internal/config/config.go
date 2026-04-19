@@ -40,9 +40,9 @@ func DefaultConfigPath() string {
 // Load reads config from ~/.novelo/config.yaml and applies defaults.
 func Load() (*Config, error) {
 	cfg := &Config{
-		ServerURL:    "http://localhost:4111",
+		ServerURL:    "http://127.0.0.1:7001",
 		OutputDir:    "novelo-output",
-		LatentCutURL: "https://api.shiyuxingjing.com",
+		LatentCutURL: "http://127.0.0.1:7001",
 	}
 
 	path := DefaultConfigPath()
@@ -60,13 +60,13 @@ func Load() (*Config, error) {
 
 	// Apply defaults for unset fields
 	if cfg.ServerURL == "" {
-		cfg.ServerURL = "http://localhost:4111"
+		cfg.ServerURL = "http://127.0.0.1:7001"
 	}
 	if cfg.OutputDir == "" {
 		cfg.OutputDir = "novelo-output"
 	}
 	if cfg.LatentCutURL == "" {
-		cfg.LatentCutURL = "https://api.shiyuxingjing.com"
+		cfg.LatentCutURL = "http://127.0.0.1:7001"
 	}
 
 	return cfg, nil
